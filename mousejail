@@ -1,48 +1,87 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <X11/Xlib.h>
-#include <X11/extensions/Xfixes.h>
+#!/bin/sh
 
+#FOR THIS SCRIPT TO WORK XDOTOOL NEEDS TO BE INSTALLED
 
-// to compile this run:
-// sudo apt install build-essential pkg-config libx11-dev libxtst-dev
-// gcc xbarrier.c $(pkg-config --cflags --libs x11 xfixes) -o xbarrier
+SCRIPT_PATH=$(dirname $0)
 
+#check if toggle mode is activated and kill the other instance of mousejail if it exists
+if [ "$#" -gt 0 ]; then
+	if [ "$1" -eq 1 ]; then
+		MOUSEJAIL_COUNT=$(pgrep -f '/bin/sh .*mousejail' | wc -w)
+		if [ "$MOUSEJAIL_COUNT" -gt 2 ]; then
+			killall mousejail 
+			exit 0
+		fi
+	fi
+fi
 
-int main(int argc, char **argv)
+#check if a windowid has been specified otherwise use the currently focused window
+if [ "$#" -gt 1 ]; then
+	WINDOW_ID=$2
+else
+	WINDOW_ID=$(xdotool getwindowfocus)
+fi
+
+create_barriers()
 {
-    Display *dpy;
-    PointerBarrier b;
-    int x1, y1, x2, y2, dirs;
-
-    if (argc != 6) {
-      printf("Usage: xbarrier x1 y1 x2 y2 dirs\ndirs: PositiveX    1\n      PositiveY    2\n      NegativeX    4\n      NegativeY    8\n");
-      return 1;
-    }
-
-    dpy = XOpenDisplay(NULL);
-    if (!dpy) {
-	return 1;
-    }
-
-    x1 = atoi(argv[1]);
-    y1 = atoi(argv[2]);
-    x2 = atoi(argv[3]);
-    y2 = atoi(argv[4]);
-    dirs = atoi(argv[5]);
-
-    b = XFixesCreatePointerBarrier(dpy, DefaultRootWindow(dpy), x1, y1, x2, y2, dirs, 0, NULL);
-    XSync(dpy, 1);
-
-    if (!b) {
-	return 1;
-    }
-
-    pause();
-
-    XFixesDestroyPointerBarrier(dpy, b);
-
-    XCloseDisplay(dpy);
-    return 0;
+	#get info of the window
+	WINDOW_INFO=$(xdotool getwindowgeometry $WINDOW_ID)
+	if [ "$?" -ne 0 ]; then
+		terminate
+	fi
+	#extract window information
+	WINDOW_X=$(echo $WINDOW_INFO | awk -F'[ ,x]' '{print $4;}')
+	WINDOW_Y=$(echo $WINDOW_INFO | awk -F'[ ,x]' '{print $5;}')
+	WINDOW_WIDTH=$(echo $WINDOW_INFO | awk -F'[ ,x]' '{print $9;}')
+	WINDOW_HEIGHT=$(echo $WINDOW_INFO | awk -F'[ ,x]' '{print $10;}')
+	#barrier overlap
+	BO=2
+	#create left barrier
+	$SCRIPT_PATH/xbarrier $WINDOW_X $(expr $WINDOW_Y - $BO) $WINDOW_X $(expr $WINDOW_Y + $WINDOW_HEIGHT + $BO) 1 & 
+	BARRIER_LEFT=$!
+	#create right barrier
+	$SCRIPT_PATH//xbarrier $(expr $WINDOW_X + $WINDOW_WIDTH) $(expr $WINDOW_Y - $BO) $(expr $WINDOW_X + $WINDOW_WIDTH) $(expr $WINDOW_Y + $WINDOW_HEIGHT + $BO) 4 & 
+	BARRIER_RIGHT=$!
+	#create upper barrier
+	$SCRIPT_PATH//xbarrier $(expr $WINDOW_X - $BO) $WINDOW_Y $(expr $WINDOW_X + $WINDOW_WIDTH + $BO) $WINDOW_Y 2 & 
+	BARRIER_UP=$!
+	#create lower barrier
+	$SCRIPT_PATH//xbarrier $(expr $WINDOW_X - $BO) $(expr $WINDOW_Y + $WINDOW_HEIGHT) $(expr $WINDOW_X + $WINDOW_WIDTH + $BO) $(expr $WINDOW_Y + $WINDOW_HEIGHT) 8 & 
+	BARRIER_DOWN=$!
 }
+
+destroy_barriers(){
+	kill $BARRIER_LEFT > /dev/null 2>&1
+	kill $BARRIER_RIGHT > /dev/null 2>&1
+	kill $BARRIER_UP > /dev/null 2>&1
+	kill $BARRIER_DOWN > /dev/null 2>&1
+}
+
+terminate()
+{
+	destroy_barriers
+	exit 0
+}
+
+#create trap to properly destroy all barriers when the script is terminated
+trap 'terminate' INT TERM
+
+#initialize the values so the ps command works properly
+BARRIER_LEFT=1
+BARRIER_RIGHT=1
+BARRIER_UP=1
+BARRIER_DOWN=1
+
+while true
+do
+	#check if window is currently focused
+	if [ "$WINDOW_ID" -eq "$(xdotool getwindowfocus)" ]; then
+		#check if barriers have already been created
+		if [ "$(ps -p $BARRIER_LEFT -o comm=)" != "xbarrier" ]; then
+			create_barriers
+		fi
+	else
+		destroy_barriers
+	fi
+	sleep 0.1
+done
