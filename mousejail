@@ -30,24 +30,36 @@ create_barriers()
 		terminate
 	fi
 	#extract window information
-	WINDOW_X=$(echo $WINDOW_INFO | awk -F'[ ,x]' '{print $4;}')
-	WINDOW_Y=$(echo $WINDOW_INFO | awk -F'[ ,x]' '{print $5;}')
-	WINDOW_WIDTH=$(echo $WINDOW_INFO | awk -F'[ ,x]' '{print $9;}')
-	WINDOW_HEIGHT=$(echo $WINDOW_INFO | awk -F'[ ,x]' '{print $10;}')
-	#barrier overlap
-	BO=2
-	#create left barrier
-	$SCRIPT_PATH/xbarrier $WINDOW_X $(expr $WINDOW_Y - $BO) $WINDOW_X $(expr $WINDOW_Y + $WINDOW_HEIGHT + $BO) 1 & 
-	BARRIER_LEFT=$!
-	#create right barrier
-	$SCRIPT_PATH//xbarrier $(expr $WINDOW_X + $WINDOW_WIDTH) $(expr $WINDOW_Y - $BO) $(expr $WINDOW_X + $WINDOW_WIDTH) $(expr $WINDOW_Y + $WINDOW_HEIGHT + $BO) 4 & 
-	BARRIER_RIGHT=$!
-	#create upper barrier
-	$SCRIPT_PATH//xbarrier $(expr $WINDOW_X - $BO) $WINDOW_Y $(expr $WINDOW_X + $WINDOW_WIDTH + $BO) $WINDOW_Y 2 & 
-	BARRIER_UP=$!
-	#create lower barrier
-	$SCRIPT_PATH//xbarrier $(expr $WINDOW_X - $BO) $(expr $WINDOW_Y + $WINDOW_HEIGHT) $(expr $WINDOW_X + $WINDOW_WIDTH + $BO) $(expr $WINDOW_Y + $WINDOW_HEIGHT) 8 & 
-	BARRIER_DOWN=$!
+	WINDOW_X_NEW=$(echo $WINDOW_INFO | awk -F'[ ,x]' '{print $4;}')
+	WINDOW_Y_NEW=$(echo $WINDOW_INFO | awk -F'[ ,x]' '{print $5;}')
+	WINDOW_WIDTH_NEW=$(echo $WINDOW_INFO | awk -F'[ ,x]' '{print $9;}')
+	WINDOW_HEIGHT_NEW=$(echo $WINDOW_INFO | awk -F'[ ,x]' '{print $10;}')
+
+	#check if barriers have not been created or need to be updated
+	if [ "$(ps -p $BARRIER_LEFT -o comm=)" != "xbarrier" ] || [ "$WINDOW_X" != "$WINDOW_X_NEW" ] || [ "$WINDOW_Y" != "$WINDOW_Y_NEW" ] || [ "$WINDOW_WIDTH" != "$WINDOW_WIDTH_NEW" ] || [ "$WINDOW_HEIGHT" != "$WINDOW_HEIGHT_NEW" ]; then
+		#destroy previous barriers
+		destroy_barriers
+
+		WINDOW_X=$WINDOW_X_NEW
+		WINDOW_Y=$WINDOW_Y_NEW
+		WINDOW_WIDTH=$WINDOW_WIDTH_NEW
+		WINDOW_HEIGHT=$WINDOW_HEIGHT_NEW
+		
+		#barrier overlap
+		BO=2
+		#create left barrier
+		$SCRIPT_PATH/xbarrier $WINDOW_X $(expr $WINDOW_Y - $BO) $WINDOW_X $(expr $WINDOW_Y + $WINDOW_HEIGHT + $BO) 1 & 
+		BARRIER_LEFT=$!
+		#create right barrier
+		$SCRIPT_PATH/xbarrier $(expr $WINDOW_X + $WINDOW_WIDTH) $(expr $WINDOW_Y - $BO) $(expr $WINDOW_X + $WINDOW_WIDTH) $(expr $WINDOW_Y + $WINDOW_HEIGHT + $BO) 4 & 
+		BARRIER_RIGHT=$!
+		#create upper barrier
+		$SCRIPT_PATH/xbarrier $(expr $WINDOW_X - $BO) $WINDOW_Y $(expr $WINDOW_X + $WINDOW_WIDTH + $BO) $WINDOW_Y 2 & 
+		BARRIER_UP=$!
+		#create lower barrier
+		$SCRIPT_PATH/xbarrier $(expr $WINDOW_X - $BO) $(expr $WINDOW_Y + $WINDOW_HEIGHT) $(expr $WINDOW_X + $WINDOW_WIDTH + $BO) $(expr $WINDOW_Y + $WINDOW_HEIGHT) 8 & 
+		BARRIER_DOWN=$!
+	fi
 }
 
 destroy_barriers(){
@@ -76,10 +88,7 @@ while true
 do
 	#check if window is currently focused
 	if [ "$WINDOW_ID" -eq "$(xdotool getwindowfocus)" ]; then
-		#check if barriers have already been created
-		if [ "$(ps -p $BARRIER_LEFT -o comm=)" != "xbarrier" ]; then
-			create_barriers
-		fi
+		create_barriers
 	else
 		destroy_barriers
 	fi

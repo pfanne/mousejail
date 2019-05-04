@@ -9,7 +9,7 @@
 // sudo apt install build-essential pkg-config libx11-dev libxtst-dev
 // gcc xbarrier.c $(pkg-config --cflags --libs x11 xfixes) -o xbarrier
 
-
+#define MAX(a,b) (((a)>(b))?(a):(b))
 int main(int argc, char **argv)
 {
     Display *dpy;
@@ -26,10 +26,10 @@ int main(int argc, char **argv)
 	return 1;
     }
 
-    x1 = atoi(argv[1]);
-    y1 = atoi(argv[2]);
-    x2 = atoi(argv[3]);
-    y2 = atoi(argv[4]);
+    x1 = MAX(0,atoi(argv[1]));
+    y1 = MAX(0,atoi(argv[2]));
+    x2 = MAX(0,atoi(argv[3]));
+    y2 = MAX(0,atoi(argv[4]));
     dirs = atoi(argv[5]);
 
     b = XFixesCreatePointerBarrier(dpy, DefaultRootWindow(dpy), x1, y1, x2, y2, dirs, 0, NULL);
